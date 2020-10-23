@@ -24,6 +24,7 @@ const localScreenAudioCheckbox = fromId('local-screen-audio-checkbox');
 const cameraInfo = fromId('camera-info');
 const stopStreamsBtn = fromId('stop-streams');
 const shareScreenBtn = fromId('share-screen');
+const leaveRoomBtn = fromId('leave-room');
 let switchCameraBtn;
 
 joinRoomBtn.addEventListener('click', joinRoom);
@@ -34,6 +35,7 @@ localCamCheckbox.addEventListener('change', changeCamPaused);
 localMicCheckbox.addEventListener('change', changeMicPaused);
 localScreenCheckbox.addEventListener('change', changeScreenPaused);
 localScreenAudioCheckbox.addEventListener('change', changeScreenAudioPaused);
+leaveRoomBtn.addEventListener('click', leaveRoom);
 // localCamCheckbox.addEventListener('change', )
 window.onload = main;
 
@@ -624,7 +626,7 @@ async function createTransport(direction) {
 
     transport.on('connect', async ({ dtlsParameters }, callback, errback) => {
         console.log(`transport connect event`, direction);
-        console.log(`===============================================================================================================================`,myPeerId);
+        console.log(`===============================================================================================================================`, myPeerId);
         socket.request('connectTransport', {
             myPeerId,
             transportId: transportOptions.id,
@@ -706,7 +708,54 @@ async function cycleCamera() {
 
 
 async function leaveRoom() {
+    if (!joined) {
+        return;
+    }
     console.log(`leaveRoom`);
+    $('#leave-room').style.display = 'none';
+
+    // stop polling
+    clearInterval(pollingInterval);
+
+    // close everything on the server-side (transports, producers, consumers)
+    let { error } = await socket.request('leave', { peerId: myPeerId });
+    if (error) {
+        console.log(error);
+    }
+
+    // closing the transports closes all producers and consumers. we
+    // don't need to do anything beyond closing the transports, except
+    // to set all our local variables to their initial states
+    try {
+        recvTransport && await recvTransport.close();
+        sendTransport && await sendTransport.close();
+    } catch (e) {
+        console.error(e);
+    }
+    recvTransport = null;
+    sendTransport = null;
+    camVideoProducer = null;
+    camAudioProducer = null;
+    screenVideoProducer = null;
+    screenAudioProducer = null;
+    localCam = null;
+    localScreen = null;
+    lastPollSyncData = {};
+    consumers = [];
+    joined = false;
+
+    // hacktastically restore ui to initial state
+    $('#join-control').style.display = 'initial';
+    $('#send-camera').style.display = 'initial';
+    $('#stop-streams').style.display = 'none';
+    $('#remote-video').innerHTML = '';
+    $('#share-screen').style.display = 'initial';
+    $('#local-screen-pause-ctrl').style.display = 'none';
+    $('#local-screen-audio-pause-ctrl').style.display = 'none';
+    showCameraInfo();
+    updateCamVideoProducerStatsDisplay();
+    updateScreenVideoProducerStatsDisplay();
+    updatePeersDisplay();
 }
 
 function uuidv4() {
@@ -738,6 +787,14 @@ function getCamPausedState() {
 
 function getMicPausedState() {
     return !localMicCheckbox.checked;
+}
+
+function getScreenPausedState() {
+    return !$('#local-screen-checkbox').checked;
+}
+
+function getScreenAudioPausedState() {
+    return !$('#local-screen-audio-checkbox').checked;
 }
 
 async function stopStreams() {
@@ -969,7 +1026,7 @@ async function unsubscribeFromTrack(peerId, mediaTag) {
         return;
     }
 
-    log('unsubscribe from track', peerId, mediaTag);
+    console.log('unsubscribe from track', peerId, mediaTag);
     try {
         await closeConsumer(consumer);
     } catch (e) {
@@ -982,5 +1039,21 @@ async function unsubscribeFromTrack(peerId, mediaTag) {
 
 async function sleep(ms) {
     return new Promise((r) => setTimeout(() => r(), ms));
-  }
-  
+}
+
+
+
+function removeVideoAudio(consumer) {
+    document.querySelectorAll(consumer.kind).forEach((v) => {
+        if (v.consumer === consumer) {
+            v.parentNode.removeChild(v);
+        }
+    });
+}
+
+
+// how do we limit bandwidth for screen share streams?
+//
+function screenshareEncodings() {
+    null;
+}

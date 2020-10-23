@@ -78,8 +78,7 @@ async function runSocketServer() {
 
         socket.on('leave', async (data, callback) => {
             try {
-                let { myPeerId } = data;
-                let peerId = myPeerId;
+                let { peerId } = data;
                 console.log('leave', peerId);
 
                 await closePeer(peerId);
@@ -481,7 +480,7 @@ async function runSocketServer() {
 }
 
 function closePeer(peerId) {
-    log('closing peer', peerId);
+    console.log('closing peer', peerId);
     for (let [id, transport] of Object.entries(roomState.transports)) {
         if (transport.appData.peerId === peerId) {
             closeTransport(transport);
